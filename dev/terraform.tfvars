@@ -1,0 +1,6 @@
+rgname                 = "dev-piyush-rg"
+service_principal_name = "dev-piyush-spn"
+keyvault_name          = "dev-piyush-kv-101"
+SUB_ID = "2c00b550-2634-47c3-bf66-fb1ceff82b49"
+cluster_name = "dev-piyush-cluster"
+node_pool_name = "devnp"
