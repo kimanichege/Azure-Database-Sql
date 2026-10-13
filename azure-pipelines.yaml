@@ -1,0 +1,175 @@
+
+trigger:
+  branches:
+    include:
+      - master
+      - feature/*
+  paths:
+    include:
+      - dev/**
+      - staging/**
+      - modules/**
+      - pipeline/**
+      - scripts/**
+      - dev.sh
+      - azure-pipelines.yaml
+
+pr: none
+
+variables:
+  terraformVersion: '1.9.0'
+  azureServiceConnection: 'Azure subscription 1(2c00b550-2634-47c3-bf66-fb1ceff82b49)'
+  backendResourceGroup: 'terraform-state-rg'
+  backendStorageAccount: 'tfdevvk2026a1'
+  backendContainer: 'tfstate'
+
+stages:
+
+# =========================================================
+# STAGE 1: VALIDATE DEV TERRAFORM CONFIGURATION
+# =========================================================
+- stage: validate
+  displayName: 'Validate Terraform'
+  jobs:
+  - job: tf_validate
+    displayName: 'Terraform Init and Validate'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    - task: TerraformTask@5
+      displayName: 'Initialize Dev Backend'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/dev'
+        backendServiceArm: '$(azureServiceConnection)'
+        backendAzureRmResourceGroupName: '$(backendResourceGroup)'
+        backendAzureRmStorageAccountName: '$(backendStorageAccount)'
+        backendAzureRmContainerName: '$(backendContainer)'
+        backendAzureRmKey: 'dev.terraform.stage'
+
+    - task: TerraformTask@5
+      displayName: 'Validate Dev Configuration'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/dev'
+
+# =========================================================
+# STAGE 2: PLAN AND APPLY DEV
+# Runs only on master after validation succeeds.
+# =========================================================
+- stage: Dev_deploy
+  displayName: 'Deploy Dev'
+  dependsOn: validate
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+
+  jobs:
+  - job: terraform_apply_dev
+    displayName: 'Plan and Apply Dev Infrastructure'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    - task: TerraformTask@5
+      displayName: 'Initialize Dev Backend'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/dev'
+        backendServiceArm: '$(azureServiceConnection)'
+        backendAzureRmResourceGroupName: '$(backendResourceGroup)'
+        backendAzureRmStorageAccountName: '$(backendStorageAccount)'
+        backendAzureRmContainerName: '$(backendContainer)'
+        backendAzureRmKey: 'dev.terraform.stage'
+
+    - task: TerraformTask@5
+      displayName: 'Terraform Plan Dev'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/dev'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
+
+    - task: TerraformTask@5
+      displayName: 'Apply Dev Infrastructure'
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/dev'
+        commandOptions: '-auto-approve'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
+
+# =========================================================
+# STAGE 3: PLAN AND APPLY STAGING
+# Runs only on master after Dev_deploy succeeds.
+# =========================================================
+- stage: stage_deploy
+  displayName: 'Deploy Staging'
+  dependsOn: Dev_deploy
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+
+  jobs:
+  - job: terraform_apply_staging
+    displayName: 'Plan and Apply Staging Infrastructure'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    - task: TerraformTask@5
+      displayName: 'Initialize Staging Backend'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/staging'
+        backendServiceArm: '$(azureServiceConnection)'
+        backendAzureRmResourceGroupName: '$(backendResourceGroup)'
+        backendAzureRmStorageAccountName: '$(backendStorageAccount)'
+        backendAzureRmContainerName: '$(backendContainer)'
+        backendAzureRmKey: 'staging.terraform.stage'
+
+    - task: TerraformTask@5
+      displayName: 'Validate Staging Configuration'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/staging'
+
+    - task: TerraformTask@5
+      displayName: 'Terraform Plan Staging'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/staging'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
+
+    - task: TerraformTask@5
+      displayName: 'Apply Staging Infrastructure'
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/staging'
+        commandOptions: '-auto-approve'
+        environmentServiceNameAzureRM: '$(azureServiceConnection)'
