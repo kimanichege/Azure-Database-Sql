@@ -9,6 +9,6 @@ resource "azurerm_key_vault" "kv" {
   purge_protection_enabled    = false
   sku_name                   = "premium"
   soft_delete_retention_days = 7
-  enable_rbac_authorization = true
+  rbac_authorization_enabled = true
  
 }
