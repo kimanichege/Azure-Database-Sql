@@ -13,8 +13,6 @@ resource "azurerm_kubernetes_cluster" "aks-cluster" {
   kubernetes_version  = data.azurerm_kubernetes_service_versions.current.latest_version
   node_resource_group = "${var.resource_group_name}-nrg"
 
-  # Required by provider schemas that require this block.
-  # Manual mode retains explicit node-pool management.
   node_provisioning_profile {
     mode = "Manual"
   }
@@ -24,8 +22,8 @@ resource "azurerm_kubernetes_cluster" "aks-cluster" {
     vm_size               = "Standard_DS2_v2"
     zones                 = ["1", "2", "3"]
     auto_scaling_enabled  = true
-    max_count             = 3
     min_count             = 1
+    max_count             = 3
     os_disk_size_gb       = 30
     type                  = "VirtualMachineScaleSets"
   }
